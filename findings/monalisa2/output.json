@@ -1,0 +1,15 @@
+{
+  "PLAN": [
+    "Describe the overall composition of the image.",
+    "Detail the subject of the painting (the Mona Lisa).",
+    "Describe the background and framing.",
+    "Note the presence and appearance of the viewers."
+  ],
+  "REASON": {
+    "Composition": "The image is a photograph of Leonardo da Vinci’s Mona Lisa hanging on a black wall. The painting takes up the majority of the frame, with a dark background emphasizing its presence.",
+    "Subject": "The subject is a portrait of a woman, presumed to be Lisa Gherardini, the wife of a Florentine merchant. She is depicted from the waist up, seated in a chair. Her expression is enigmatic, with a subtle smile. Her eyes gaze slightly to the left, and her hands are folded in her lap. The painting is rendered in oil on poplar wood. The colors are predominantly dark browns, greens, and yellows, creating a rich and atmospheric effect. The level of detail is remarkably high, particularly in the rendering of her skin and clothing.",
+    "Framing": "The painting is framed by an ornate, gold-colored frame. The frame is heavily detailed, featuring carvings and intricate designs. Its presence adds to the artwork’s grandeur and reinforces its status as a masterpiece.",
+    "Viewers": "Two individuals, a man and a woman, are standing before the painting. The man has red hair, and the woman has blonde hair. They are both dressed in casual clothing. They look at the painting with expressions of interest or contemplation. The presence of the viewers adds a sense of scale and reinforces the artwork's importance."
+  },
+  "EVALUATE": "The image is a straightforward photograph of the iconic Mona Lisa painting, presented with two viewers in the foreground. This composition visually emphasizes the artwork’s importance and its place within a museum or gallery setting."
+}

@@ -1,0 +1,18 @@
+# env Files
+.env
+.env.local
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environment and virtual environment directories
+venv/
+env/
+.venv/
+.virtualenv/
+.idea/
+.vscode/
+.mypy_cache/

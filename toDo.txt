@@ -1,0 +1,9 @@
+==Primary==
+Add user prompt in the "Caption / response:"
+Log Agent thought Process
+Create tool usage for the model
+
+==Secondary==
+Format Agent Output as Json on Interface
+Download Agent Output as Json
+Save Results in Findings Folder

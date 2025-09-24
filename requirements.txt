@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+requests
+python-multipart
+pillow
+numpy
+faiss-cpu  # or faiss-gpu if you have GPU
+sqlalchemy
+alembic   # optional for migrations
+streamlit
