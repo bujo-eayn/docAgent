@@ -8,3 +8,4 @@ faiss-cpu  # or faiss-gpu if you have GPU
 sqlalchemy
 alembic   # optional for migrations
 streamlit
+aiohttp

@@ -1,7 +1,6 @@
 ==Primary==
-Add user prompt in the "Caption / response:"
-Log Agent thought Process
-Create tool usage for the model
+Correctly Format Agent outputs
+Log Reasoning
 
 ==Secondary==
 Format Agent Output as Json on Interface

@@ -1,14 +1,9 @@
 # app/faiss_indexer.py
 import faiss
 import numpy as np
-from sqlalchemy import create_engine, select, MetaData, Table
+from services.database_service import DatabaseService
 
-# Ensure this DB path matches the backend's DB path
-engine = create_engine("sqlite:///./data/memory.db",
-                       connect_args={"check_same_thread": False})
-metadata = MetaData()
-metadata.reflect(bind=engine)
-images_tbl = Table("images", metadata, autoload_with=engine)
+db_service = DatabaseService()
 
 
 def build_index():
@@ -17,9 +12,7 @@ def build_index():
     Returns: (index, ids_with_captions) or (None, None) if there are no embeddings.
     ids_with_captions: list of tuples (image_id, caption)
     """
-    with engine.connect() as conn:
-        rows = conn.execute(select(
-            images_tbl.c.id, images_tbl.c.embedding, images_tbl.c.caption)).fetchall()
+    rows = db_service.get_embeddings_data()
 
     ids, vectors, captions = [], [], []
     for r in rows:
