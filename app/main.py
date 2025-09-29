@@ -1,7 +1,7 @@
 # app/main.py
 import os
 from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import JSONResponse
 
 # Import services
 from config import config
@@ -21,14 +21,14 @@ file_service = FileService()
 ollama_service = OllamaService()
 context_service = ContextService()
 
-app = FastAPI(title="Gemma Agent with Streaming & FAISS Context")
+app = FastAPI(title="Gemma Agent with FAISS Context")
 
 
-@app.post("/upload-image-stream")
-async def upload_image_stream(file: UploadFile = File(...), prompt: str = Form("Describe the image")):
+@app.post("/upload-image")
+async def upload_image(file: UploadFile = File(...), prompt: str = Form("Describe the image")):
     """
-    Endpoint that (1) saves a placeholder DB record, (2) streams the model's Plan/Reason/Evaluate
-    output back to the client as SSE-like text, and (3) updates the DB with final response & embedding.
+    Endpoint that processes the image completely and returns the full response with context.
+    No streaming - waits for complete model response.
     """
     contents = await file.read()
     filename = file_service.save_uploaded_file(contents, file.filename)
@@ -43,52 +43,46 @@ async def upload_image_stream(file: UploadFile = File(...), prompt: str = Form("
     image_id = db_service.create_image_record(filename)
     db_service.create_interaction_record(image_id, prompt)
 
-    # Generator that streams model output and collects full text for DB update
-    def event_generator():
-        collected_fragments = []
-        try:
-            for s in ollama_service.stream_ollama_chat_with_image(b64, prompt, context_text):
-                # forward to client
-                yield s
-                # collect token fragments, but ignore the [DONE] marker
-                if s.startswith("data:"):
-                    payload = s[len("data:"):].strip()
-                    if payload != "[DONE]":
-                        collected_fragments.append(payload)
-            # After finishing, build final response text
-            final_text = "".join(collected_fragments).strip()
-        except Exception as e:
-            # If streaming fails, still update DB with error message
-            final_text = f"[STREAMING ERROR] {str(e)}"
+    try:
+        # Get complete response from model (non-streaming)
+        model_response = ollama_service.get_complete_response(
+            b64, prompt, context_text)
 
-        # Attempt to compute embedding for final text + prompt
+        # Compute embedding for final text + prompt
         embedding_bytes = None
         try:
-            if final_text:
+            if model_response:
                 emb = ollama_service.call_ollama_embed(
-                    final_text + "\n" + prompt)
+                    model_response + "\n" + prompt)
                 embedding_bytes = emb.tobytes()
         except Exception:
             embedding_bytes = None
 
-        # Update DB records with final response & embedding (if any)
-        try:
-            db_service.update_image_with_response(
-                image_id, final_text, embedding_bytes)
-            db_service.update_interaction_response(image_id, final_text)
-        except Exception:
-            # Swallow DB update errors but don't crash streaming
-            pass
+        # Update DB records with final response & embedding
+        db_service.update_image_with_response(
+            image_id, model_response, embedding_bytes)
+        db_service.update_interaction_response(image_id, model_response)
 
-        # Send final response and image_id to frontend
-        import json
-        final_data = json.dumps({"final": final_text, "image_id": image_id})
-        yield f"data: {final_data}\n\n"
+        return JSONResponse({
+            "success": True,
+            "image_id": image_id,
+            "response": model_response,
+            "context": context_text if context_text else "No relevant context found from previous images",
+            "filename": filename
+        })
 
-        # Final marker to client
-        yield "data: [DONE]\n\n"
+    except Exception as e:
+        error_msg = f"Error processing image: {str(e)}"
+        # Update DB with error
+        db_service.update_image_with_response(image_id, error_msg, None)
+        db_service.update_interaction_response(image_id, error_msg)
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+        return JSONResponse({
+            "success": False,
+            "error": error_msg,
+            "image_id": image_id,
+            "context": context_text if context_text else "No relevant context found from previous images"
+        }, status_code=500)
 
 
 @app.get("/images")

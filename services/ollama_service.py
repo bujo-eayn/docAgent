@@ -40,10 +40,51 @@ class OllamaService:
                 continue
         raise last_exc
 
+    def get_complete_response(self, image_b64: str, user_message: str, context: str) -> str:
+        """
+        Get complete response from Ollama /api/chat (non-streaming).
+        Returns the complete response text.
+        """
+        url = f"{self.base_url}/api/chat"
+        system_prompt = (
+            "You are a structured reasoning assistant. Follow this format exactly:\n\n"
+            "PLAN: Provide a short numbered plan of steps you will take.\n\n"
+            "REASON: Work through the observations, produce reasoning and details.\n\n"
+            "EVALUATE: Summarize the final conclusion briefly.\n\n"
+            "If the CONTEXT section is provided, consult it and reference relevant parts.\n\n"
+            f"CONTEXT:\n{context}\n\n"
+            "Respond in plain text following PLAN / REASON / EVALUATE sections."
+        )
+
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message,
+                    "images": [image_b64]},
+            ],
+            "stream": False,  # Important: set stream to False for complete response
+        }
+
+        # Make non-streaming request
+        r = requests.post(url, json=payload, timeout=300)
+        r.raise_for_status()
+
+        response_data = r.json()
+
+        # Extract the complete message content
+        if isinstance(response_data, dict):
+            message = response_data.get("message", {})
+            if isinstance(message, dict):
+                return message.get("content", "")
+
+        return ""
+
     def stream_ollama_chat_with_image(self, image_b64: str, user_message: str, context: str):
         """
         Stream tokens from Ollama /api/chat in a blocking generator.
         The generator yields SSE-like lines: "data: <token>\n\n".
+        (Keeping this method for backward compatibility if needed)
         """
         url = f"{self.base_url}/api/chat"
         system_prompt = (
@@ -66,52 +107,36 @@ class OllamaService:
             "stream": True,
         }
 
-        # Use requests streaming; Ollama will likely stream JSON lines prefixed with "data: "
+        # Use requests streaming
         with requests.post(url, json=payload, stream=True, timeout=300) as r:
             r.raise_for_status()
             for raw_line in r.iter_lines():
                 if not raw_line:
                     continue
                 try:
-                    line = raw_line.decode("utf-8")
+                    line = raw_line.decode("utf-8").strip()
                 except Exception:
-                    line = str(raw_line)
-                # Ollama streaming often uses leading "data: " lines
-                if line.startswith("data:"):
-                    chunk = line[len("data:"):].strip()
-                else:
-                    chunk = line.strip()
-
-                if not chunk:
                     continue
 
-                if chunk == "[DONE]":
-                    # Signal end of stream to client
-                    yield "data: [DONE]\n\n"
-                    break
+                if not line:
+                    continue
 
-                # Try to parse JSON chunk to find message content
-                token_text = None
+                # Parse the JSON response from Ollama
                 try:
-                    parsed = json.loads(chunk)
-                    # Common fields in streaming chunks
+                    parsed = json.loads(line)
                     if isinstance(parsed, dict):
-                        # Some Ollama versions emit {"message": {"content": "<...>"}}
-                        msg = parsed.get("message") or parsed.get(
-                            "choices", [{}])[0].get("message")
-                        if isinstance(msg, dict):
-                            token_text = msg.get("content")
-                        # older style: {"response": "..."} or {"text": "..."}
-                        if not token_text:
-                            token_text = parsed.get(
-                                "response") or parsed.get("text")
-                    else:
-                        token_text = str(parsed)
-                except Exception:
-                    # fallback: treat chunk as raw text token
-                    token_text = chunk
+                        # Check if this is the final response
+                        if parsed.get("done", False):
+                            yield "data: [DONE]\n\n"
+                            break
 
-                if token_text:
-                    # Yield as SSE-like payload (the frontend expects lines beginning with "data:")
-                    # Note we yield token_text directly — the frontend appends sequentially.
-                    yield f"data: {token_text}\n\n"
+                        # Extract content from message
+                        message = parsed.get("message", {})
+                        if isinstance(message, dict):
+                            content = message.get("content", "")
+                            if content:
+                                # Yield the content token
+                                yield f"data: {content}\n\n"
+                except json.JSONDecodeError:
+                    # If not valid JSON, skip this line
+                    continue
