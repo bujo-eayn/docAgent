@@ -1,8 +1,9 @@
-==Primary==
-Correctly Format Agent outputs
-Log Reasoning
+===Primary===
+Correct workflow
+Work on Conversations
 
-==Secondary==
+===Secondary===
 Format Agent Output as Json on Interface
 Download Agent Output as Json
 Save Results in Findings Folder
+

@@ -19,10 +19,11 @@ class OllamaService:
         Call Ollama embed endpoint. Try /api/embed, then /api/embeddings.
         Returns np.array(dtype=float32) if successful, else raises.
         """
+        last_exc = None
         for endpoint in ["/api/embed", "/api/embeddings"]:
             try:
                 url = f"{self.base_url}{endpoint}"
-                payload = {"model": "nomic-embed-text", "input": text}
+                payload = {"model": "mxbai-embed-large", "input": text}
                 r = requests.post(url, json=payload, timeout=30)
                 r.raise_for_status()
                 out = r.json()
@@ -37,8 +38,13 @@ class OllamaService:
                 return np.array(vec, dtype=np.float32)
             except Exception as e:
                 last_exc = e
+                last_endpoint = endpoint
                 continue
-        raise last_exc
+        raise RuntimeError(f"Failed to get embedding from Ollama endpoints. Last tried: {last_endpoint}. Error: {last_exc}")
+        if last_exc is not None:
+            raise last_exc
+        else:
+            raise RuntimeError("Failed to get embedding and no exception was captured.")
 
     def get_complete_response(self, image_b64: str, user_message: str, context: str) -> str:
         """
