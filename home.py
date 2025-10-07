@@ -2,11 +2,12 @@
 import streamlit as st
 import requests
 import json
+import os
 
-BACKEND = "http://localhost:8000"
+BACKEND = os.getenv("BACKEND_URL", "http://backend:8000")
 
 st.set_page_config(page_title="Image Agent", layout="centered")
-st.title("Gemma Image Agent")
+st.title("docAgent")
 
 uploaded = st.file_uploader("Upload an image", type=[
                             "png", "jpg", "jpeg", "webp"])
@@ -14,7 +15,7 @@ prompt = st.text_input(
     "What should the agent do with this image?", "Describe the image in detail")
 
 if uploaded is not None:
-    st.image(uploaded, caption="Preview", use_container_width=True)
+    st.image(uploaded, caption="Preview")
 
     if st.button("Send to Agent", type="primary"):
         files = {"file": (uploaded.name, uploaded.getvalue(), uploaded.type)}

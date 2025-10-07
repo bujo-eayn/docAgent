@@ -7,3 +7,5 @@ Format Agent Output as Json on Interface
 Download Agent Output as Json
 Save Results in Findings Folder
 
+===Doing===
+Use Postgres abd pgvector - Index with IVFFlat (Inverted File Flat) index

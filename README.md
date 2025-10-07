@@ -1,4 +1,4 @@
-# AI Image Agent
+# docAgent
 
 This project is a minimal AI Agent that allows users to **upload images through a Streamlit interface**, stores the images and metadata in a **SQLite database**, and uses **Gemma (via Ollama)** to generate descriptions of the uploaded images. The goal is to build an **AI agent from scratch** without using orchestration frameworks like LangChain or LlamaIndex.
 

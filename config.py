@@ -3,7 +3,8 @@ import os
 
 
 class Config:
-    OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+    OLLAMA_URL = os.environ.get(
+        "OLLAMA_URL", "http://host.docker.internal:11434")
     MODEL_NAME = os.environ.get("MODEL_NAME", "gemma3")
     BASE_DIR = os.environ.get("DATA_DIR", "./data")
 

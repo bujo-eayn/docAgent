@@ -21,7 +21,7 @@ file_service = FileService()
 ollama_service = OllamaService()
 context_service = ContextService()
 
-app = FastAPI(title="Gemma Agent with FAISS Context")
+app = FastAPI(title="docAgent with FAISS Context")
 
 
 @app.post("/upload-image")

@@ -32,3 +32,26 @@
 **/values.dev.yaml
 LICENSE
 README.md
+findings/
+.devcontainer/
+
+
+# .dockerignore
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.vscode/
+.idea/
+*.log
+.git/
+.gitignore
+*.md
+!README.Docker.md
+data/
+*.db
+.DS_Store

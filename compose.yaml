@@ -1,49 +1,100 @@
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Docker Compose reference guide at
-# https://docs.docker.com/go/compose-spec-reference/
+# compose.yaml
 
-# Here the instructions define your application as a service called "server".
-# This service is built from the Dockerfile in the current directory.
-# You can add other services your application may depend on here, such as a
-# database or a cache. For examples, see the Awesome Compose repository:
-# https://github.com/docker/awesome-compose
 services:
-  server:
+  # Ollama service for running LLM models > Removed for now due to error on Windows
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: docAgent-ollama
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   ports:
+  #     - "11434:11434"
+  #   networks:
+  #     - docAgent-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:11434/ || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 30s
+    # Comment out GPU support for Windows (unless you have NVIDIA GPU with proper drivers)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # Backend FastAPI service
+  backend:
     build:
       context: .
+      dockerfile: Dockerfile
+    container_name: docAgent-backend
+    volumes:
+      - ./data:/app/data
+      - ./app:/app/app
+      - ./config.py:/app/config.py
+      - ./models.py:/app/models.py
     ports:
-      - 8000:8000
+      - "8000:8000"
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - MODEL_NAME=gemma3
+      - DATA_DIR=/app/data
+    depends_on:
+      ollama:
+        condition: service_started
+    networks:
+      - docAgent-network
+    restart: unless-stopped
 
-# The commented out section below is an example of how to define a PostgreSQL
-# database that your application can use. `depends_on` tells Docker Compose to
-# start the database before your application. The `db-data` volume persists the
-# database data between container restarts. The `db-password` secret is used
-# to set the database password. You must create `db/password.txt` and add
-# a password of your choosing to it before running `docker compose up`.
-#     depends_on:
-#       db:
-#         condition: service_healthy
-#   db:
-#     image: postgres
-#     restart: always
-#     user: postgres
-#     secrets:
-#       - db-password
-#     volumes:
-#       - db-data:/var/lib/postgresql/data
-#     environment:
-#       - POSTGRES_DB=example
-#       - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
-#     expose:
-#       - 5432
-#     healthcheck:
-#       test: [ "CMD", "pg_isready" ]
-#       interval: 10s
-#       timeout: 5s
-#       retries: 5
-# volumes:
-#   db-data:
-# secrets:
-#   db-password:
-#     file: db/password.txt
+  # Frontend Streamlit service
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: docAgent-frontend
+    volumes:
+      - ./home.py:/app/home.py
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - docAgent-network
+    restart: unless-stopped
 
+  # Model initialization service (runs once to download models) > Removed for now due to error on Windows
+  # model-init:
+  #   image: ollama/ollama:latest
+  #   container_name: docAgent-model-init
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   networks:
+  #     - docAgent-network
+  #   depends_on:
+  #     ollama:
+  #       condition: service_started
+  #   entrypoint: ["/bin/sh", "-c"]
+  #   command:
+  #     - |
+  #       echo "Waiting for Ollama to be ready..."
+  #       sleep 10
+  #       echo "Pulling gemma3 model..."
+  #       ollama pull gemma3
+  #       echo "Pulling mxbai-embed-large model..."
+  #       ollama pull mxbai-embed-large
+  #       echo "Models downloaded successfully!"
+  #   restart: "no"
+
+networks:
+  docAgent-network:
+    driver: bridge
+
+volumes:
+  ollama_data:
+    driver: local
