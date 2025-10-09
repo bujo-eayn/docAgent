@@ -1,30 +1,24 @@
-# compose.yaml
-
 services:
-  # Ollama service for running LLM models > Removed for now due to error on Windows
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: docAgent-ollama
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-  #   ports:
-  #     - "11434:11434"
-  #   networks:
-  #     - docAgent-network
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -f http://localhost:11434/ || exit 1"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 10
-  #     start_period: 30s
-    # Comment out GPU support for Windows (unless you have NVIDIA GPU with proper drivers)
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+  # PostgreSQL with pgvector extension (Official Image)
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: docAgent-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=docAgent
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - docAgent-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   # Backend FastAPI service
   backend:
@@ -35,20 +29,29 @@ services:
     volumes:
       - ./data:/app/data
       - ./app:/app/app
+      - ./services:/app/services
       - ./config.py:/app/config.py
       - ./models.py:/app/models.py
+      - ./migrate_sqlite_to_postgres.py:/app/migrate_sqlite_to_postgres.py
     ports:
       - "8000:8000"
     environment:
       - OLLAMA_URL=http://host.docker.internal:11434
       - MODEL_NAME=gemma3
       - DATA_DIR=/app/data
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=docAgent
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
     depends_on:
-      ollama:
-        condition: service_started
+      postgres:
+        condition: service_healthy
     networks:
       - docAgent-network
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Frontend Streamlit service
   frontend:
@@ -68,33 +71,10 @@ services:
       - docAgent-network
     restart: unless-stopped
 
-  # Model initialization service (runs once to download models) > Removed for now due to error on Windows
-  # model-init:
-  #   image: ollama/ollama:latest
-  #   container_name: docAgent-model-init
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-  #   networks:
-  #     - docAgent-network
-  #   depends_on:
-  #     ollama:
-  #       condition: service_started
-  #   entrypoint: ["/bin/sh", "-c"]
-  #   command:
-  #     - |
-  #       echo "Waiting for Ollama to be ready..."
-  #       sleep 10
-  #       echo "Pulling gemma3 model..."
-  #       ollama pull gemma3
-  #       echo "Pulling mxbai-embed-large model..."
-  #       ollama pull mxbai-embed-large
-  #       echo "Models downloaded successfully!"
-  #   restart: "no"
-
 networks:
   docAgent-network:
     driver: bridge
 
 volumes:
-  ollama_data:
+  postgres_data:
     driver: local

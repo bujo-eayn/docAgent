@@ -16,3 +16,7 @@ env/
 .idea/
 .vscode/
 .mypy_cache/
+
+# Migration files
+migrate_sqlite_to_postgres.py
+README.PostgreSQL.md
