@@ -20,3 +20,6 @@ env/
 # Migration files
 migrate_sqlite_to_postgres.py
 README.PostgreSQL.md
+
+# devcontainer
+.devcontainer/

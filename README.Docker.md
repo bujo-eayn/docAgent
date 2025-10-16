@@ -83,7 +83,7 @@ docker compose logs -f model-init
 
 # You should see:
 # "Pulling gemma3 model..."
-# "Pulling nomic-embed-text model..."
+# "Pulling mxbai-embed-large model..."
 # "Models downloaded successfully!"
 ```
 
@@ -102,7 +102,7 @@ Once all services are running:
    - Click "Browse files" to upload an image
    - Enter a prompt (e.g., "Describe this image in detail")
    - Click "Send to Agent"
-   - Watch the response stream in real-time
+   <!-- - Watch the response stream in real-time -->
 
 2. **View Context**
    - After receiving a response, expand "📚 Context Sent to Model"
@@ -192,7 +192,7 @@ To use a different model:
        - |
          echo "Pulling llama2 model..."
          ollama pull llama2
-         ollama pull nomic-embed-text
+         ollama pull mxbai-embed-large
    ```
 
 3. Restart services:
@@ -294,7 +294,7 @@ docker compose logs model-init
 **Manually pull models:**
 ```bash
 docker compose exec ollama ollama pull gemma3
-docker compose exec ollama ollama pull nomic-embed-text
+docker compose exec ollama ollama pull mxbai-embed-large
 ```
 
 **Verify models are available:**

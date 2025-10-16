@@ -1,35 +1,35 @@
-# services/context_service.py
+# services/context_service.py - Updated for Chat-Based Context
 from services.ollama_service import OllamaService
-from services.database_service import DatabaseService
+from services.chat_service import ChatService
 
 
 class ContextService:
     def __init__(self):
         self.ollama_service = OllamaService()
-        self.db_service = DatabaseService()
+        self.chat_service = ChatService()
 
-    def build_context_from_prompt(self, prompt: str) -> str:
-        """Build context using pgvector search based on user prompt"""
+    def build_context_from_query(self, chat_id: int, query: str, top_k: int = 3) -> str:
+        """
+        Build context from the chat's document by searching relevant chunks.
+        Context is scoped to the specific chat only.
+        """
         try:
-            # Convert prompt to embedding
-            query_vec = self.ollama_service.call_ollama_embed(prompt)
+            # Convert query to embedding
+            query_vec = self.ollama_service.call_ollama_embed(query)
 
-            # Search for similar images using pgvector
-            neighbors = self.db_service.search_similar_images(
-                query_vec, top_k=2)
+            # Search for relevant contexts within this chat only
+            relevant_contexts = self.chat_service.search_context(
+                chat_id, query_vec, top_k=top_k)
 
-            if neighbors:
-                # Format context from similar images
+            if relevant_contexts:
+                # Format context with similarity scores
                 context_parts = []
-                for n in neighbors:
-                    if n.get("caption"):
-                        # Include similarity score in context
-                        context_parts.append(
-                            f"- (Similarity: {1 - n['distance']:.2f}) {n['caption']}"
-                        )
-                return "\n".join(context_parts)
+                for ctx in relevant_contexts:
+                    context_parts.append(
+                        f"[Relevance: {ctx['similarity']:.2f}]\n{ctx['content']}"
+                    )
+                return "\n\n---\n\n".join(context_parts)
         except Exception as e:
             print(f"Error building context: {e}")
-            pass
 
         return ""

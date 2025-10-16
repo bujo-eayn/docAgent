@@ -5,7 +5,6 @@ import numpy as np
 import requests
 from config import config
 
-
 class OllamaService:
     def __init__(self):
         self.base_url = config.OLLAMA_URL
@@ -24,7 +23,7 @@ class OllamaService:
             try:
                 url = f"{self.base_url}{endpoint}"
                 payload = {"model": "mxbai-embed-large", "input": text}
-                r = requests.post(url, json=payload, timeout=30)
+                r = requests.post(url, json=payload, timeout=700)
                 r.raise_for_status()
                 out = r.json()
                 if isinstance(out, dict) and "embeddings" in out:
@@ -145,4 +144,46 @@ class OllamaService:
                                 yield f"data: {content}\n\n"
                 except json.JSONDecodeError:
                     # If not valid JSON, skip this line
+                    continue
+
+    # Add method for non-image chat
+    def stream_ollama_chat(self, user_message: str, system_prompt: str):
+        """Stream chat response without image"""
+        url = f"{self.base_url}/api/chat"
+
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            "stream": True,
+        }
+
+        with requests.post(url, json=payload, stream=True, timeout=300) as r:
+            r.raise_for_status()
+            for raw_line in r.iter_lines():
+                if not raw_line:
+                    continue
+                try:
+                    line = raw_line.decode("utf-8").strip()
+                except Exception:
+                    continue
+
+                if not line:
+                    continue
+
+                try:
+                    parsed = json.loads(line)
+                    if isinstance(parsed, dict):
+                        if parsed.get("done", False):
+                            yield "data: [DONE]\n\n"
+                            break
+
+                        message = parsed.get("message", {})
+                        if isinstance(message, dict):
+                            content = message.get("content", "")
+                            if content:
+                                yield f"data: {content}\n\n"
+                except json.JSONDecodeError:
                     continue
