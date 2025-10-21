@@ -3,6 +3,10 @@
 
 A document-based chat application that extracts and indexes information from images, enabling intelligent Q&A using RAG (Retrieval Augmented Generation) with pgvector.
 
+## 🎥 Demo
+
+
+
 ## 🌟 Features
 
 - **Chat-Based Interface**: Each document gets its own conversation thread

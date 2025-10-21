@@ -23,7 +23,7 @@ class OllamaService:
             try:
                 url = f"{self.base_url}{endpoint}"
                 payload = {"model": "mxbai-embed-large", "input": text}
-                r = requests.post(url, json=payload, timeout=700)
+                r = requests.post(url, json=payload, timeout=30)
                 r.raise_for_status()
                 out = r.json()
                 if isinstance(out, dict) and "embeddings" in out:
@@ -37,59 +37,13 @@ class OllamaService:
                 return np.array(vec, dtype=np.float32)
             except Exception as e:
                 last_exc = e
-                last_endpoint = endpoint
                 continue
-        raise RuntimeError(f"Failed to get embedding from Ollama endpoints. Last tried: {last_endpoint}. Error: {last_exc}")
-        if last_exc is not None:
-            raise last_exc
-        else:
-            raise RuntimeError("Failed to get embedding and no exception was captured.")
-
-    def get_complete_response(self, image_b64: str, user_message: str, context: str) -> str:
-        """
-        Get complete response from Ollama /api/chat (non-streaming).
-        Returns the complete response text.
-        """
-        url = f"{self.base_url}/api/chat"
-        system_prompt = (
-            "You are a structured reasoning assistant. Follow this format exactly:\n\n"
-            "PLAN: Provide a short numbered plan of steps you will take.\n\n"
-            "REASON: Work through the observations, produce reasoning and details.\n\n"
-            "EVALUATE: Summarize the final conclusion briefly.\n\n"
-            "If the CONTEXT section is provided, consult it and reference relevant parts.\n\n"
-            f"CONTEXT:\n{context}\n\n"
-            "Respond in plain text following PLAN / REASON / EVALUATE sections."
-        )
-
-        payload = {
-            "model": self.model_name,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message,
-                    "images": [image_b64]},
-            ],
-            "stream": False,  # Important: set stream to False for complete response
-        }
-
-        # Make non-streaming request
-        r = requests.post(url, json=payload, timeout=300)
-        r.raise_for_status()
-
-        response_data = r.json()
-
-        # Extract the complete message content
-        if isinstance(response_data, dict):
-            message = response_data.get("message", {})
-            if isinstance(message, dict):
-                return message.get("content", "")
-
-        return ""
+        raise last_exc
 
     def stream_ollama_chat_with_image(self, image_b64: str, user_message: str, context: str):
         """
-        Stream tokens from Ollama /api/chat in a blocking generator.
-        The generator yields SSE-like lines: "data: <token>\n\n".
-        (Keeping this method for backward compatibility if needed)
+        Stream tokens from Ollama /api/chat with image.
+        Yields SSE-like lines: "data: <token>\n\n"
         """
         url = f"{self.base_url}/api/chat"
         system_prompt = (
@@ -148,7 +102,10 @@ class OllamaService:
 
     # Add method for non-image chat
     def stream_ollama_chat(self, user_message: str, system_prompt: str):
-        """Stream chat response without image"""
+        """
+        Stream chat response without image.
+        Yields SSE-like lines: "data: <token>\n\n"
+        """
         url = f"{self.base_url}/api/chat"
 
         payload = {

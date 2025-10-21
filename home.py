@@ -65,57 +65,51 @@ def create_new_chat(uploaded_file):
 
 
 def send_message(chat_id, question):
-    """Send a message in the current chat"""
-    data = {"question": question}
-
-    # Add user message to UI immediately
+    """Send a message in the current chat with streaming response"""
     st.session_state.messages.append({"role": "user", "content": question})
 
-    message_placeholder = st.empty()
-    full_response = ""
-    context_data = None
+    data = {"question": question}
 
-    try:
-        resp = requests.post(
-            f"{BACKEND}/chats/{chat_id}/message",
-            data=data,
-            stream=True,
-            timeout=300
-        )
+    def response_stream():
+        """Generator that yields streamed text chunks from backend"""
+        try:
+            with requests.post(
+                f"{BACKEND}/chats/{chat_id}/message",
+                data=data,
+                stream=True,
+                timeout=300
+            ) as resp:
+                resp.raise_for_status()
 
-        if resp.status_code == 200:
-            for chunk in resp.iter_lines():
-                if chunk:
+                for chunk in resp.iter_lines():
+                    if not chunk:
+                        continue
                     decoded = chunk.decode("utf-8")
+
+                    # Expected format: "data: <text>"
                     if decoded.startswith("data:"):
                         payload = decoded[len("data:"):].strip()
-                        if payload == "[DONE]":
-                            break
-                        try:
-                            j = json.loads(payload)
-                            if isinstance(j, dict):
-                                if "final" in j:
-                                    full_response = j["final"]
-                                if "context" in j:
-                                    context_data = j["context"]
-                            else:
-                                full_response += str(j)
-                        except json.JSONDecodeError:
-                            full_response += payload
 
-                        message_placeholder.markdown(
-                            f"**Assistant:** {full_response}")
+                        # Skip control tokens
+                        if not payload or payload == "[DONE]":
+                            continue
 
-            # Add assistant response to messages
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": full_response,
-                "context_used": context_data
-            })
-        else:
-            st.error(f"Error: {resp.status_code}")
-    except Exception as e:
-        st.error(f"Error sending message: {e}")
+                        # 🔧 Add a space between fragments for proper word spacing
+                        if not payload.startswith((" ", "\n", ".", ",", "!", "?", ";", ":")):
+                            yield " "
+                        yield payload
+
+        except Exception as e:
+            yield f"\n⚠️ Error: {str(e)}\n"
+
+    # 🧠 Stream response live to UI and capture final output
+    with st.chat_message("assistant"):
+        full_response = st.write_stream(response_stream)
+
+    # Store the assistant message in session state
+    st.session_state.messages.append(
+        {"role": "assistant", "content": full_response})
+
 
 # ===== UI LAYOUT =====
 
