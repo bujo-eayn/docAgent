@@ -1,2 +1,33 @@
 ===Primary===
 Correct streaming response to be well formatted
++Add the Video to the README
+-Test reviewed Code - Continue Claude at 2pm = Rebuilding because of missing files 
+
+= Clean unwanted files and git ignore = push to github
+
+git commit message
+feat: Add comprehensive architecture documentation for docAgent
+
+- Introduced architecture.md detailing system overview, high-level architecture, core components, data flow, key algorithms, and design patterns.
+- Documented frontend (Streamlit), backend (FastAPI), service layer, data layer, and error handling strategies.
+- Included database schema and configuration management details.
+
+docs: Create Docker guide for docAgent deployment
+
+- Added docker.md covering Docker architecture, service configurations, Dockerfile details, and Docker Compose commands.
+- Included troubleshooting tips and production considerations for Docker setup.
+
+docs: Establish setup guide for docAgent installation
+
+- Created setup.md outlining prerequisites, Docker and local development setup instructions, and verification steps.
+- Provided troubleshooting tips and development tips for easier onboarding.
+
+feat: Implement custom exception handling
+
+- Added exceptions.py with application-specific exceptions for better error handling.
+- Defined base exception class and specific exceptions for chat not found, document processing failures, and database issues.
+
+chore: Introduce centralized logging utility
+
+- Created logger.py for consistent logging configuration across the application.
+- Implemented setup_logger function to configure logging levels and formats.

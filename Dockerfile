@@ -21,6 +21,9 @@ COPY app/ ./app/
 COPY services/ ./services/
 COPY config.py .
 COPY models.py .
+COPY constants.py .
+COPY exceptions.py .
+COPY utils/ ./utils/
 
 # Create data directories
 RUN mkdir -p /data/images

@@ -1,13 +1,15 @@
 # home.py (Complete Redesign for Chat Interface)
-import streamlit as st
-import requests
 import json
 import os
 
+import requests
+import streamlit as st
+
 BACKEND = os.getenv("BACKEND_URL", "http://backend:8000")
 
-st.set_page_config(page_title="Document Chat Agent",
-                   layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="Document Chat Agent", layout="wide", initial_sidebar_state="expanded"
+)
 
 # Initialize session state
 if "current_chat_id" not in st.session_state:
@@ -43,20 +45,19 @@ def load_chat_messages(chat_id):
 
 def create_new_chat(uploaded_file):
     """Create a new chat by uploading a document"""
-    files = {"file": (uploaded_file.name,
-                      uploaded_file.getvalue(), uploaded_file.type)}
+    files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
 
     with st.spinner("📄 Processing document... This may take a minute."):
         try:
-            resp = requests.post(
-                f"{BACKEND}/chats/create", files=files, timeout=300)
+            resp = requests.post(f"{BACKEND}/chats/create", files=files, timeout=600)
             if resp.status_code == 200:
                 result = resp.json()
                 st.session_state.current_chat_id = result["chat_id"]
                 load_chats()
                 load_chat_messages(result["chat_id"])
                 st.success(
-                    f"✅ Chat created! Processed {result['chunks_created']} context chunks.")
+                    f"✅ Chat created! Processed {result['chunks_created']} context chunks."
+                )
                 st.rerun()
             else:
                 st.error(f"Error: {resp.status_code} - {resp.text}")
@@ -77,7 +78,7 @@ def send_message(chat_id, question):
                 f"{BACKEND}/chats/{chat_id}/message",
                 data=data,
                 stream=True,
-                timeout=300
+                timeout=600,
             ) as resp:
                 resp.raise_for_status()
 
@@ -88,14 +89,16 @@ def send_message(chat_id, question):
 
                     # Expected format: "data: <text>"
                     if decoded.startswith("data:"):
-                        payload = decoded[len("data:"):].strip()
+                        payload = decoded[len("data:") :].strip()
 
                         # Skip control tokens
                         if not payload or payload == "[DONE]":
                             continue
 
                         # 🔧 Add a space between fragments for proper word spacing
-                        if not payload.startswith((" ", "\n", ".", ",", "!", "?", ";", ":")):
+                        if not payload.startswith(
+                            (" ", "\n", ".", ",", "!", "?", ";", ":")
+                        ):
                             yield " "
                         yield payload
 
@@ -107,8 +110,7 @@ def send_message(chat_id, question):
         full_response = st.write_stream(response_stream)
 
     # Store the assistant message in session state
-    st.session_state.messages.append(
-        {"role": "assistant", "content": full_response})
+    st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 
 # ===== UI LAYOUT =====
@@ -123,7 +125,7 @@ with st.sidebar:
     uploaded_file = st.file_uploader(
         "Upload a document image",
         type=["png", "jpg", "jpeg", "webp"],
-        key="new_chat_uploader"
+        key="new_chat_uploader",
     )
 
     if uploaded_file and st.button("Create New Chat", type="primary"):
@@ -146,15 +148,15 @@ with st.sidebar:
                 if st.button(
                     f"📄 {chat['title'][:30]}...",
                     key=f"chat_{chat['id']}",
-                    use_container_width=True
+                    use_container_width=True,
                 ):
-                    st.session_state.current_chat_id = chat['id']
-                    load_chat_messages(chat['id'])
+                    st.session_state.current_chat_id = chat["id"]
+                    load_chat_messages(chat["id"])
                     st.rerun()
             with col2:
                 if st.button("🗑️", key=f"delete_{chat['id']}"):
                     requests.delete(f"{BACKEND}/chats/{chat['id']}")
-                    if st.session_state.current_chat_id == chat['id']:
+                    if st.session_state.current_chat_id == chat["id"]:
                         st.session_state.current_chat_id = None
                         st.session_state.messages = []
                     load_chats()
@@ -202,7 +204,8 @@ else:
     st.info("👈 Start a new chat by uploading a document in the sidebar!")
 
     # Show welcome message with instructions
-    st.markdown("""
+    st.markdown(
+        """
     ## Welcome to Document Chat Agent! 🚀
     
     ### How it works:
@@ -218,4 +221,5 @@ else:
     - 🎯 **Scoped Context** - Each chat only accesses its own document
     
     **Get started by uploading a document in the sidebar!** →
-    """)
+    """
+    )

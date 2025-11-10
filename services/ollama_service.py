@@ -1,51 +1,205 @@
 # services/ollama_service.py
+"""Ollama service for LLM and embedding operations.
+
+This service provides integration with the Ollama API for:
+- Text embeddings generation
+- Chat completions with streaming
+- Image-based chat completions
+"""
 import base64
 import json
+from typing import Any, Dict, Generator, List, Optional
+
 import numpy as np
 import requests
+
 from config import config
+from constants import (
+    EMBEDDING_MODEL_NAME,
+    STREAM_DATA_PREFIX,
+    STREAM_DONE_MARKER,
+)
+from exceptions import EmbeddingException, OllamaServiceException
+from utils.logger import setup_logger
+
+logger = setup_logger(__name__)
+
 
 class OllamaService:
+    """Service for interacting with Ollama API."""
+
     def __init__(self):
-        self.base_url = config.OLLAMA_URL
-        self.model_name = config.MODEL_NAME
+        """Initialize Ollama service with configuration."""
+        self.base_url = config.ollama_url
+        self.model_name = config.model_name
+        self.embedding_model = config.embedding_model_name
 
     def image_to_base64_bytes(self, file_bytes: bytes) -> str:
+        """Convert image bytes to base64 string for Ollama API.
+
+        Args:
+            file_bytes: Raw image file bytes
+
+        Returns:
+            Base64 encoded string representation of the image
+        """
         return base64.b64encode(file_bytes).decode("utf-8")
 
-    def call_ollama_embed(self, text: str):
-        """
-        Call Ollama embed endpoint. Try /api/embed, then /api/embeddings.
-        Returns np.array(dtype=float32) if successful, else raises.
+    def call_ollama_embed(self, text: str) -> np.ndarray:
+        """Generate embeddings for text using Ollama.
+
+        Tries multiple API endpoints for compatibility with different Ollama versions.
+
+        Args:
+            text: Text to generate embeddings for
+
+        Returns:
+            Numpy array of embeddings (1024 dimensions, float32)
+
+        Raises:
+            EmbeddingException: If embedding generation fails
         """
         last_exc = None
         for endpoint in ["/api/embed", "/api/embeddings"]:
             try:
                 url = f"{self.base_url}{endpoint}"
-                payload = {"model": "mxbai-embed-large", "input": text}
-                r = requests.post(url, json=payload, timeout=30)
-                r.raise_for_status()
-                out = r.json()
-                if isinstance(out, dict) and "embeddings" in out:
-                    vec = out["embeddings"][0]
-                elif isinstance(out, dict) and "embedding" in out:
-                    vec = out["embedding"]
+                payload = {"model": self.embedding_model, "input": text}
+                response = requests.post(
+                    url, json=payload, timeout=config.embed_timeout
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                # Handle different response formats
+                if isinstance(data, dict) and "embeddings" in data:
+                    vec = data["embeddings"][0]
+                elif isinstance(data, dict) and "embedding" in data:
+                    vec = data["embedding"]
                 else:
-                    vec = out.get("data", [{}])[0].get("embedding")
+                    vec = data.get("data", [{}])[0].get("embedding")
+
                 if vec is None:
-                    raise ValueError("No embedding returned")
+                    raise ValueError("No embedding returned from API")
+
                 return np.array(vec, dtype=np.float32)
+
             except Exception as e:
                 last_exc = e
+                logger.warning(f"Embedding endpoint {endpoint} failed: {e}")
                 continue
-        raise last_exc
 
-    def stream_ollama_chat_with_image(self, image_b64: str, user_message: str, context: str):
-        """
-        Stream tokens from Ollama /api/chat with image.
-        Yields SSE-like lines: "data: <token>\n\n"
+        # All endpoints failed
+        error_msg = f"All embedding endpoints failed. Last error: {last_exc}"
+        logger.error(error_msg)
+        raise EmbeddingException(text_preview=text[:100], reason=str(last_exc))
+
+    def _stream_ollama_response(
+        self, messages: List[Dict[str, Any]], timeout: int = None
+    ) -> Generator[str, None, None]:
+        """Internal method to stream Ollama chat responses.
+
+        Args:
+            messages: List of message dictionaries for Ollama API
+            timeout: Request timeout in seconds (default: from config)
+
+        Yields:
+            SSE-formatted strings with content tokens
+
+        Raises:
+            OllamaServiceException: If streaming fails
         """
         url = f"{self.base_url}/api/chat"
+        timeout = timeout or config.chat_timeout
+
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "stream": True,
+        }
+
+        try:
+            with requests.post(
+                url, json=payload, stream=True, timeout=timeout
+            ) as response:
+                response.raise_for_status()
+
+                for raw_line in response.iter_lines():
+                    if not raw_line:
+                        continue
+
+                    try:
+                        line = raw_line.decode("utf-8").strip()
+                    except UnicodeDecodeError:
+                        logger.warning("Failed to decode response line")
+                        continue
+
+                    if not line:
+                        continue
+
+                    # Parse JSON response from Ollama
+                    try:
+                        parsed = json.loads(line)
+                        if not isinstance(parsed, dict):
+                            continue
+
+                        # Check if streaming is complete
+                        if parsed.get("done", False):
+                            yield f"{STREAM_DATA_PREFIX} {STREAM_DONE_MARKER}\n\n"
+                            break
+
+                        # Extract content from message
+                        message = parsed.get("message", {})
+                        if isinstance(message, dict):
+                            content = message.get("content", "")
+                            if content:
+                                yield f"{STREAM_DATA_PREFIX} {content}\n\n"
+
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to parse JSON: {line[:100]}")
+                        continue
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Ollama streaming request failed: {e}")
+            raise OllamaServiceException(endpoint=url, reason=str(e))
+
+    def stream_ollama_chat(
+        self, user_message: str, system_prompt: str
+    ) -> Generator[str, None, None]:
+        """Stream chat response for text-only conversation.
+
+        Args:
+            user_message: The user's question or message
+            system_prompt: System prompt with context and instructions
+
+        Yields:
+            SSE-formatted strings with response tokens
+
+        Raises:
+            OllamaServiceException: If streaming fails
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+
+        yield from self._stream_ollama_response(messages)
+
+    def stream_ollama_chat_with_image(
+        self, image_b64: str, user_message: str, context: str
+    ) -> Generator[str, None, None]:
+        """Stream chat response with image input.
+
+        Args:
+            image_b64: Base64-encoded image
+            user_message: The user's question or message
+            context: Context information to include in system prompt
+
+        Yields:
+            SSE-formatted strings with response tokens
+
+        Raises:
+            OllamaServiceException: If streaming fails
+        """
         system_prompt = (
             "You are a structured reasoning assistant. Follow this format exactly:\n\n"
             "PLAN: Provide a short numbered plan of steps you will take.\n\n"
@@ -56,91 +210,9 @@ class OllamaService:
             "Respond in plain text following PLAN / REASON / EVALUATE sections."
         )
 
-        payload = {
-            "model": self.model_name,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message,
-                    "images": [image_b64]},
-            ],
-            "stream": True,
-        }
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message, "images": [image_b64]},
+        ]
 
-        # Use requests streaming
-        with requests.post(url, json=payload, stream=True, timeout=300) as r:
-            r.raise_for_status()
-            for raw_line in r.iter_lines():
-                if not raw_line:
-                    continue
-                try:
-                    line = raw_line.decode("utf-8").strip()
-                except Exception:
-                    continue
-
-                if not line:
-                    continue
-
-                # Parse the JSON response from Ollama
-                try:
-                    parsed = json.loads(line)
-                    if isinstance(parsed, dict):
-                        # Check if this is the final response
-                        if parsed.get("done", False):
-                            yield "data: [DONE]\n\n"
-                            break
-
-                        # Extract content from message
-                        message = parsed.get("message", {})
-                        if isinstance(message, dict):
-                            content = message.get("content", "")
-                            if content:
-                                # Yield the content token
-                                yield f"data: {content}\n\n"
-                except json.JSONDecodeError:
-                    # If not valid JSON, skip this line
-                    continue
-
-    # Add method for non-image chat
-    def stream_ollama_chat(self, user_message: str, system_prompt: str):
-        """
-        Stream chat response without image.
-        Yields SSE-like lines: "data: <token>\n\n"
-        """
-        url = f"{self.base_url}/api/chat"
-
-        payload = {
-            "model": self.model_name,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            "stream": True,
-        }
-
-        with requests.post(url, json=payload, stream=True, timeout=300) as r:
-            r.raise_for_status()
-            for raw_line in r.iter_lines():
-                if not raw_line:
-                    continue
-                try:
-                    line = raw_line.decode("utf-8").strip()
-                except Exception:
-                    continue
-
-                if not line:
-                    continue
-
-                try:
-                    parsed = json.loads(line)
-                    if isinstance(parsed, dict):
-                        if parsed.get("done", False):
-                            yield "data: [DONE]\n\n"
-                            break
-
-                        message = parsed.get("message", {})
-                        if isinstance(message, dict):
-                            content = message.get("content", "")
-                            if content:
-                                yield f"data: {content}\n\n"
-                except json.JSONDecodeError:
-                    continue
+        yield from self._stream_ollama_response(messages)

@@ -16,6 +16,7 @@ env/
 .idea/
 .vscode/
 .mypy_cache/
+.env
 
 # Migration files
 migrate_sqlite_to_postgres.py
@@ -24,3 +25,10 @@ README.PostgreSQL.md
 # devcontainer
 .devcontainer/
 
+# claude files
+.claude/
+
+# Unwanted dev files
+REFACTORING_CHECKLIST.md
+REFACTORING_PLAN.md
+REFACTORING_SUMMARY.md
